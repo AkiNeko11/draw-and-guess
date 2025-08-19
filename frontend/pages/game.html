@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏房间 - 你画我猜</title>
+    <link rel="stylesheet" href="../css/game.css">
+</head>
+<body>
+    <div class="header">
+        <div class="room-info">
+            <div class="room-id">房间 <span id="roomId">-</span></div>
+            <div class="game-status" id="gameStatus">等待开始...</div>
+        </div>
+        <button class="leave-btn" onclick="leaveRoom()">退出房间</button>
+    </div>
+
+    <div class="main-container">
+        <div class="game-area">
+            <div class="current-word">
+                <div class="word-display" id="currentWord">等待题目...</div>
+                <div class="word-hint" id="wordHint">游戏即将开始</div>
+            </div>
+
+            <div class="canvas-container">
+                <canvas id="drawingCanvas" width="600" height="400"></canvas>
+                
+                <div class="canvas-tools">
+                    <button class="tool-btn active" data-tool="pen">✏️ 画笔</button>
+                    <button class="tool-btn" data-tool="eraser">🗑️ 橡皮</button>
+                    
+                    <div class="color-picker">
+                        <div class="color-btn active" style="background: #000" data-color="#000000"></div>
+                        <div class="color-btn" style="background: #e74c3c" data-color="#e74c3c"></div>
+                        <div class="color-btn" style="background: #3498db" data-color="#3498db"></div>
+                        <div class="color-btn" style="background: #2ecc71" data-color="#2ecc71"></div>
+                        <div class="color-btn" style="background: #f39c12" data-color="#f39c12"></div>
+                        <div class="color-btn" style="background: #9b59b6" data-color="#9b59b6"></div>
+                    </div>
+                    
+                    <button class="tool-btn" onclick="clearCanvas()">🗑️ 清空</button>
+                </div>
+            </div>
+
+            <div class="submit-area">
+                <button class="submit-btn" id="submitBtn" onclick="submitDrawing()" style="display: none;">
+                    📤 提交画作
+                </button>
+            </div>
+        </div>
+
+        <div class="side-panel">
+            <div class="panel-section">
+                <div class="section-title">👥 玩家列表</div>
+                <ul class="player-list" id="playerList">
+                    <li class="player-item">
+                        <span class="player-name">加载中...</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">💭 猜题区</div>
+                <div class="guess-area">
+                    <div class="guess-input">
+                        <input type="text" id="guessInput" placeholder="输入你的答案..." maxlength="50">
+                        <button class="guess-btn" onclick="submitGuess()">提交</button>
+                    </div>
+                    <div class="guess-history" id="guessHistory">
+                        <div class="guess-item">等待其他玩家猜题...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/game.js"></script>
+</body>
+</html> 

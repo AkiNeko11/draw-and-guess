@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>你画我猜 - 在线小游戏</title>
+    <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+    <div class="container">
+        <div class="logo"> 你画我猜</div>
+        <div class="subtitle">和朋友一起享受绘画与猜谜的乐趣</div>
+        
+        <div class="input-group">
+            <label for="playerName">你的昵称</label>
+            <input type="text" id="playerName" placeholder="输入你的昵称" maxlength="20">
+        </div>
+        
+        <div class="input-group">
+            <label for="roomId">房间号</label>
+            <input type="text" id="roomId" placeholder="输入房间号或留空创建新房间" maxlength="10">
+        </div>
+        
+        <button class="btn" onclick="joinGame()">🚀 加入游戏</button>
+        <button class="btn btn-secondary" onclick="createRoom()">➕ 创建房间</button>
+        
+        <div class="error" id="errorMsg"></div>
+        
+        <div class="features">
+            <h3>游戏特色</h3>
+            <div class="feature-item">简单易玩，无需下载</div>
+            <div class="feature-item">实时互动，趣味无穷</div>
+            <div class="feature-item">支持多人同时游戏</div>
+            <div class="feature-item">创意绘画，欢声笑语</div>
+        </div>
+    </div>
+
+    <script src="../js/main.js"></script>
+</body>
+</html> 
