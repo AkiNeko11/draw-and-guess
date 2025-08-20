@@ -40,7 +40,7 @@ class GameService {
                 success: true,
                 playerId,
                 roomId,
-                room: this.formatRoomForClient(room)
+                room: this.formatRoomForClient(room, playerId)
             };
         } catch (error) {
             console.error('加入房间失败:', error);
@@ -64,7 +64,7 @@ class GameService {
     }
 
     // 获取房间状态
-    async getRoomState(roomId, since = null) {
+    async getRoomState(roomId, requestingPlayerId = null, since = null) {
         try {
             if (!roomId) {
                 return { success: false, error: 'roomId is required' };
@@ -78,7 +78,7 @@ class GameService {
             // 如果提供了since参数，可以在这里做增量更新优化
             return {
                 success: true,
-                room: this.formatRoomForClient(roomState),
+                room: this.formatRoomForClient(roomState, requestingPlayerId),
                 serverTime: Date.now()
             };
         } catch (error) {
@@ -189,7 +189,7 @@ class GameService {
     }
 
     // 格式化房间数据供客户端使用
-    formatRoomForClient(room) {
+    formatRoomForClient(room, requestingPlayerId = null) {
         const formatted = {
             roomId: room.roomId,
             players: room.players || [],
@@ -213,8 +213,11 @@ class GameService {
                 formatted.currentRound.imageData = room.currentRound.imageData;
             }
 
-            // 不向客户端返回正确答案（除非游戏结束）
-            if (room.stage === 'finished') {
+            // 返回题目的条件：
+            // 1. 游戏结束时所有人都能看到
+            // 2. 绘画阶段和猜题阶段，只有画家能看到
+            if (room.stage === 'finished' || 
+                (requestingPlayerId && requestingPlayerId === room.currentRound.drawerId)) {
                 formatted.currentRound.word = room.currentRound.word;
             }
         }

@@ -68,7 +68,7 @@ class GameController {
     // 获取房间状态（轮询接口）
     async getRoomState(req, res) {
         try {
-            const { roomId } = req.query;
+            const { roomId, playerId } = req.query;
             const since = req.query.since ? parseInt(req.query.since) : null;
             
             if (!roomId) {
@@ -78,7 +78,7 @@ class GameController {
                 });
             }
 
-            const result = await gameService.getRoomState(roomId, since);
+            const result = await gameService.getRoomState(roomId, playerId, since);
             
             if (result.success) {
                 res.json({
