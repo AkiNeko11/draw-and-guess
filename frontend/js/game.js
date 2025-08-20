@@ -34,6 +34,8 @@ let lineWidth = 3;
 let currentRound = null;
 let isDrawer = false;
 let pollInterval = null;
+let hasInitializedCanvas = false; // 追踪画布是否已初始化
+let currentPlayers = []; // 当前房间的玩家列表
 
 // 初始化函数
 function initializeGame() {
@@ -45,6 +47,9 @@ function initializeGame() {
     
     // 绑定事件
     bindEvents();
+    
+    // 初始化绘图工具状态
+    updateDrawingToolsState();
     
     // 开始轮询房间状态
     startPolling();
@@ -63,6 +68,8 @@ function bindEvents() {
     // 工具选择
     document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
         btn.addEventListener('click', () => {
+            if (!isDrawer) return; // 只有画家才能选择工具
+            
             document.querySelector('.tool-btn.active').classList.remove('active');
             btn.classList.add('active');
             currentTool = btn.dataset.tool;
@@ -81,6 +88,8 @@ function bindEvents() {
     // 颜色选择
     document.querySelectorAll('.color-btn').forEach(btn => {
         btn.addEventListener('click', () => {
+            if (!isDrawer) return; // 只有画家才能选择颜色
+            
             document.querySelector('.color-btn.active').classList.remove('active');
             btn.classList.add('active');
             currentColor = btn.dataset.color;
@@ -130,6 +139,49 @@ function clearCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
+// 更新绘图工具状态
+function updateDrawingToolsState() {
+    const toolBtns = document.querySelectorAll('.tool-btn[data-tool]');
+    const colorBtns = document.querySelectorAll('.color-btn');
+    const clearBtn = document.querySelector('[onclick="clearCanvas()"]');
+    
+    if (isDrawer) {
+        // 画家 - 启用所有工具
+        toolBtns.forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+        });
+        colorBtns.forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+        });
+        if (clearBtn) {
+            clearBtn.disabled = false;
+            clearBtn.style.opacity = '1';
+            clearBtn.style.cursor = 'pointer';
+        }
+    } else {
+        // 非画家 - 禁用所有工具
+        toolBtns.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.3';
+            btn.style.cursor = 'not-allowed';
+        });
+        colorBtns.forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.3';
+            btn.style.cursor = 'not-allowed';
+        });
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.style.opacity = '0.3';
+            clearBtn.style.cursor = 'not-allowed';
+        }
+    }
+}
+
 // 开始新回合
 async function startNewRound() {
     try {
@@ -147,6 +199,10 @@ async function startNewRound() {
         const result = await response.json();
         
         if (result.ok) {
+            // 清空画布并重置初始化状态
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            hasInitializedCanvas = true; // 标记为已初始化（空画布）
+            
             // 更新当前回合信息
             currentRound = {
                 roundId: result.roundId,
@@ -311,8 +367,16 @@ function updateGameState(room) {
     
     // 更新当前回合
     if (room.currentRound) {
+        const wasDrawer = isDrawer;
+        const previousRoundId = currentRound ? currentRound.roundId : null;
+        
         currentRound = room.currentRound;
         isDrawer = currentRound.drawerId === gameData.playerId;
+        
+        // 如果是新回合或者角色发生变化，重置画布初始化状态
+        if (previousRoundId !== currentRound.roundId || wasDrawer !== isDrawer) {
+            hasInitializedCanvas = false;
+        }
         
         // 隐藏开始按钮
         document.getElementById('startBtn').style.display = 'none';
@@ -320,9 +384,19 @@ function updateGameState(room) {
         // 更新界面状态
         updateRoundState(room.stage);
         
-        // 显示画作（如果有）
+        // 显示画作逻辑：
+        // 1. 非画家始终更新画布
+        // 2. 画家只在首次进入回合时更新画布（如果有现有画作）
         if (room.currentRound.imageData) {
-            displayDrawing(room.currentRound.imageData);
+            if (!isDrawer) {
+                // 非画家始终显示最新画作
+                displayDrawing(room.currentRound.imageData);
+            } else if (!hasInitializedCanvas) {
+                // 画家首次进入，加载现有画作（如果有）
+                displayDrawing(room.currentRound.imageData);
+                hasInitializedCanvas = true;
+            }
+            // 画家在已初始化后不再被覆盖
         }
         
         // 更新答案历史
@@ -331,6 +405,7 @@ function updateGameState(room) {
         // 空闲状态
         currentRound = null;
         isDrawer = false;
+        hasInitializedCanvas = false;
         
         // 清空画布
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -339,6 +414,7 @@ function updateGameState(room) {
         document.getElementById('currentWord').textContent = '等待开始...';
         document.getElementById('wordHint').textContent = '点击开始游戏按钮开始新回合';
         document.getElementById('submitBtn').style.display = 'none';
+        document.getElementById('endBtn').style.display = 'none';
         document.getElementById('guessInput').disabled = true;
         document.querySelector('.guess-btn').disabled = true;
         
@@ -354,10 +430,16 @@ function updateGameState(room) {
         // 清空猜题历史
         document.getElementById('guessHistory').innerHTML = '<div class="guess-item">等待游戏开始...</div>';
     }
+    
+    // 更新绘图工具状态
+    updateDrawingToolsState();
 }
 
 // 更新玩家列表
 function updatePlayerList(players, scores) {
+    // 保存当前玩家列表供其他函数使用
+    currentPlayers = players;
+    
     const playerList = document.getElementById('playerList');
     
     playerList.innerHTML = players.map(player => `
@@ -463,8 +545,9 @@ function updateGuessHistory(answers) {
 
 // 根据玩家ID获取玩家名称
 function getPlayerNameById(playerId) {
-    // 这里可以从当前的玩家列表中查找，简化处理
-    return playerId === gameData.playerId ? playerName : '其他玩家';
+    // 从当前玩家列表中查找
+    const player = currentPlayers.find(p => p.id === playerId);
+    return player ? player.name : '未知玩家';
 }
 
 // 退出房间

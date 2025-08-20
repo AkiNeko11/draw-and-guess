@@ -163,16 +163,16 @@ class JsonStorage {
         room.scores.delete(playerId);
         room.lastActivity = Date.now();
         
-        await this.writeRoom(roomId, room);
+        console.log(`玩家 ${playerId} 离开房间 ${roomId}`);
         
-        // 如果房间没人了，延迟删除房间
+        // 如果房间没人了，立即删除房间
         if (room.players.size === 0) {
-            setTimeout(async () => {
-                await this.deleteRoom(roomId);
-            }, 5000); // 5秒后删除空房间
+            await this.deleteRoom(roomId);
+        } else {
+            // 如果还有人，更新房间文件
+            await this.writeRoom(roomId, room);
         }
         
-        console.log(`玩家 ${playerId} 离开房间 ${roomId}`);
         return removed;
     }
 
@@ -338,7 +338,34 @@ class JsonStorage {
         }
         
         if (cleanedCount > 0) {
-            console.log(`清理了 ${cleanedCount} 个过期房间`);
+            console.log(`已清理 ${cleanedCount} 个过期房间`);
+        }
+        
+        return cleanedCount;
+    }
+    
+    // 清理空房间（启动时调用）
+    async cleanupEmptyRooms() {
+        const roomFiles = await this.getAllRoomFiles();
+        let cleanedCount = 0;
+        
+        console.log(`检查 ${roomFiles.length} 个房间文件...`);
+        
+        for (const file of roomFiles) {
+            const roomId = path.basename(file, '.json');
+            const room = await this.readRoom(roomId);
+            
+            if (room && room.players.size === 0) {
+                console.log(`发现空房间 ${roomId}，正在删除...`);
+                await this.deleteRoom(roomId);
+                cleanedCount++;
+            }
+        }
+        
+        if (cleanedCount > 0) {
+            console.log(`已清理 ${cleanedCount} 个空房间`);
+        } else {
+            console.log('没有发现需要清理的空房间');
         }
         
         return cleanedCount;
