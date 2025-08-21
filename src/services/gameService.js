@@ -95,24 +95,25 @@ class GameService {
     }
 
     // 开始新回合
-    async startRound(roomId, starterId, word = null) {
+    async startRound(roomId, word = null) {
         try {
-            if (!roomId || !starterId) {
-                return { success: false, error: 'roomId and starterId are required' };
+            if (!roomId) {
+                return { success: false, error: 'roomId is required' };
             }
 
             // 如果没有提供题目，随机选择一个
             const selectedWord = word || this.getRandomWord();
 
-            const round = await storage.startRound(roomId, starterId, selectedWord);
+            const round = await storage.startRound(roomId, selectedWord);
             if (!round) {
-                return { success: false, error: 'Failed to start round' };
+                return { success: false, error: 'Failed to start round - not all players ready or insufficient players' };
             }
 
             return {
                 success: true,
                 roundId: round.roundId,
-                word: selectedWord // 只返回给出题者
+                drawerId: round.drawerId,
+                word: selectedWord
             };
         } catch (error) {
             console.error('开始回合失败:', error);
@@ -174,6 +175,36 @@ class GameService {
         }
     }
 
+    // 切换玩家准备状态
+    async togglePlayerReady(roomId, playerId) {
+        try {
+            if (!roomId || !playerId) {
+                return { success: false, error: 'roomId and playerId are required' };
+            }
+
+            const result = await storage.togglePlayerReady(roomId, playerId);
+            
+            // 如果所有玩家都准备好了，自动开始游戏
+            if (result.success && result.allPlayersReady) {
+                const startResult = await this.startRound(roomId);
+                if (startResult.success) {
+                    return {
+                        ...result,
+                        gameStarted: true,
+                        roundId: startResult.roundId,
+                        drawerId: startResult.drawerId,
+                        word: startResult.word
+                    };
+                }
+            }
+
+            return result;
+        } catch (error) {
+            console.error('切换准备状态失败:', error);
+            return { success: false, error: '切换准备状态失败' };
+        }
+    }
+
     // 获取下一个画家
     getNextDrawer(room) {
         const players = Array.from(room.players.values());
@@ -202,6 +233,7 @@ class GameService {
             players: room.players || [],
             scores: room.scores || {},
             stage: room.stage,
+            readyPlayers: room.readyPlayers || [], // 添加准备状态
             lastActivity: room.lastActivity,
             serverTime: Date.now()
         };
@@ -247,17 +279,6 @@ class GameService {
         } catch (error) {
             console.error('获取统计信息失败:', error);
             return { success: false, error: '获取统计信息失败' };
-        }
-    }
-
-    // 清理过期房间（手动触发）
-    async cleanupRooms() {
-        try {
-            const count = await storage.cleanupExpiredRooms();
-            return { success: true, cleanedCount: count };
-        } catch (error) {
-            console.error('清理房间失败:', error);
-            return { success: false, error: '清理房间失败' };
         }
     }
 }

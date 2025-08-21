@@ -8,39 +8,48 @@ const urlParams = new URLSearchParams(window.location.search);
 const roomId = urlParams.get('room');
 const playerName = urlParams.get('name');
 
-// 从本地存储获取完整游戏数据
+// 游戏相关变量
 let gameData = null;
-try {
-    gameData = JSON.parse(localStorage.getItem('gameData'));
-} catch (e) {
-    console.warn('无法获取游戏数据:', e);
-}
+let isDrawer = false;
+let currentRound = null;
+let currentPlayers = [];
+let isReady = false; // 添加准备状态变量
 
-// 如果没有游戏数据，返回主页
-if (!gameData || !gameData.playerId) {
-    console.warn('缺少游戏数据，返回主页');
-    window.location.href = 'index.html';
-}
-
-// Canvas 绘图相关
-const canvas = document.getElementById('drawingCanvas');
-const ctx = canvas.getContext('2d');
+// 画布相关变量
+let canvas, ctx;
 let isDrawing = false;
 let currentTool = 'pen';
 let currentColor = '#000000';
 let lineWidth = 3;
+let hasInitializedCanvas = false;
 
-// 游戏状态
-let currentRound = null;
-let isDrawer = false;
+// 轮询相关
 let pollInterval = null;
-let hasInitializedCanvas = false; // 追踪画布是否已初始化
-let currentPlayers = []; // 当前房间的玩家列表
 
 // 初始化函数
-function initializeGame() {
-    // 显示房间信息
-    document.getElementById('roomId').textContent = roomId || '未知';
+async function initializeGame() {
+    console.log('初始化游戏...');
+    
+    // 从本地存储获取完整游戏数据
+    try {
+        gameData = JSON.parse(localStorage.getItem('gameData'));
+    } catch (e) {
+        console.warn('无法获取游戏数据:', e);
+    }
+    
+    // 如果没有游戏数据，返回主页
+    if (!gameData || !gameData.playerId) {
+        console.warn('缺少游戏数据，返回主页');
+        window.location.href = 'index.html';
+        return;
+    }
+    
+    // 初始化画布
+    canvas = document.getElementById('drawingCanvas');
+    ctx = canvas.getContext('2d');
+    
+    // 更新页面显示
+    document.getElementById('roomId').textContent = gameData.roomId;
     
     // 初始化画布
     initCanvas();
@@ -182,43 +191,65 @@ function updateDrawingToolsState() {
     }
 }
 
-// 开始新回合
-async function startNewRound() {
+// 切换准备状态
+async function toggleReady() {
     try {
-        const response = await fetch(`${API_BASE}/start-round`, {
+        const response = await fetch(`${API_BASE}/toggle-ready`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 roomId: gameData.roomId,
-                starterId: gameData.playerId
+                playerId: gameData.playerId
             })
         });
 
         const result = await response.json();
         
         if (result.ok) {
-            // 清空画布并重置初始化状态
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            hasInitializedCanvas = true; // 标记为已初始化（空画布）
+            isReady = result.isReady;
             
-            // 更新当前回合信息
-            currentRound = {
-                roundId: result.roundId,
-                word: result.word
-            };
-            isDrawer = true;
+            // 更新按钮状态
+            const readyBtn = document.getElementById('readyBtn');
+            if (isReady) {
+                readyBtn.textContent = '❌ 取消准备';
+                readyBtn.style.background = 'linear-gradient(45deg, #ff6b6b, #e74c3c)';
+            } else {
+                readyBtn.textContent = '✅ 准备';
+                readyBtn.style.background = 'linear-gradient(45deg, #4CAF50, #45a049)';
+            }
             
-            // 隐藏开始按钮
-            document.getElementById('startBtn').style.display = 'none';
-            updateGameStatus('游戏开始！你来画画 🎨');
+            // 显示准备状态信息
+            updateGameStatus(`准备状态: ${result.readyCount}/${result.totalPlayers} 名玩家已准备`);
+            
+            // 如果游戏自动开始了
+            if (result.gameStarted) {
+                currentRound = {
+                    roundId: result.roundId,
+                    drawerId: result.drawerId,
+                    word: result.drawerId === gameData.playerId ? result.word : null
+                };
+                
+                isDrawer = result.drawerId === gameData.playerId;
+                readyBtn.style.display = 'none';
+                
+                // 清空画布
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                hasInitializedCanvas = true;
+                
+                if (isDrawer) {
+                    updateGameStatus('游戏开始！你来画画 🎨');
+                } else {
+                    updateGameStatus('游戏开始！等待画家作画...');
+                }
+            }
         } else {
-            alert('开始游戏失败: ' + (result.error || '未知错误'));
+            alert('操作失败: ' + (result.error || '未知错误'));
         }
     } catch (error) {
-        console.error('开始游戏错误:', error);
-        alert('网络错误，开始游戏失败');
+        console.error('切换准备状态错误:', error);
+        alert('网络错误，操作失败');
     }
 }
 
@@ -363,7 +394,7 @@ async function pollRoomState() {
 // 更新游戏状态
 function updateGameState(room) {
     // 更新玩家列表
-    updatePlayerList(room.players, room.scores);
+    updatePlayerList(room.players, room.scores, room.readyPlayers);
     
     // 更新当前回合
     if (room.currentRound) {
@@ -378,8 +409,8 @@ function updateGameState(room) {
             hasInitializedCanvas = false;
         }
         
-        // 隐藏开始按钮
-        document.getElementById('startBtn').style.display = 'none';
+        // 隐藏准备按钮
+        document.getElementById('readyBtn').style.display = 'none';
         
         // 更新界面状态
         updateRoundState(room.stage);
@@ -412,18 +443,34 @@ function updateGameState(room) {
         
         // 重置界面
         document.getElementById('currentWord').textContent = '等待开始...';
-        document.getElementById('wordHint').textContent = '点击开始游戏按钮开始新回合';
+        document.getElementById('wordHint').textContent = '等待所有玩家准备';
         document.getElementById('submitBtn').style.display = 'none';
         document.getElementById('endBtn').style.display = 'none';
         document.getElementById('guessInput').disabled = true;
         document.querySelector('.guess-btn').disabled = true;
         
-        // 显示开始按钮（如果房间有至少2个玩家）
+        // 显示准备按钮（如果房间有至少2个玩家）
         if (room.players.length >= 2) {
-            document.getElementById('startBtn').style.display = 'block';
-            updateGameStatus('准备开始新回合...');
+            const readyBtn = document.getElementById('readyBtn');
+            readyBtn.style.display = 'block';
+            
+            // 更新按钮状态
+            const myId = gameData.playerId;
+            isReady = room.readyPlayers.includes(myId);
+            
+            if (isReady) {
+                readyBtn.textContent = '❌ 取消准备';
+                readyBtn.style.background = 'linear-gradient(45deg, #ff6b6b, #e74c3c)';
+            } else {
+                readyBtn.textContent = '✅ 准备';
+                readyBtn.style.background = 'linear-gradient(45deg, #4CAF50, #45a049)';
+            }
+            
+            const readyCount = room.readyPlayers.length;
+            const totalPlayers = room.players.length;
+            updateGameStatus(`准备中... (${readyCount}/${totalPlayers} 名玩家已准备)`);
         } else {
-            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('readyBtn').style.display = 'none';
             updateGameStatus('等待更多玩家加入（至少需要2人）...');
         }
         
@@ -436,21 +483,27 @@ function updateGameState(room) {
 }
 
 // 更新玩家列表
-function updatePlayerList(players, scores) {
+function updatePlayerList(players, scores, readyPlayers = []) {
     // 保存当前玩家列表供其他函数使用
     currentPlayers = players;
     
     const playerList = document.getElementById('playerList');
     
-    playerList.innerHTML = players.map(player => `
+    playerList.innerHTML = players.map(player => {
+        const isCurrentDrawer = currentRound && currentRound.drawerId === player.id;
+        const isPlayerReady = readyPlayers.includes(player.id);
+        const readyStatus = isPlayerReady ? '<span class="ready-status">✅</span>' : '<span class="ready-status">⏳</span>';
+        
+        return `
         <li class="player-item">
             <span class="player-name">
                 ${player.name}
-                ${currentRound && currentRound.drawerId === player.id ? '<span class="current-drawer">画家</span>' : ''}
+                ${isCurrentDrawer ? '<span class="current-drawer">🎨 画家</span>' : ''}
+                ${currentRound ? '' : readyStatus}
             </span>
             <span class="player-score">${scores[player.id] || 0}</span>
         </li>
-    `).join('');
+    `}).join('');
 }
 
 // 更新回合状态

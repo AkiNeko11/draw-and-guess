@@ -5,14 +5,9 @@ const path = require('path');
 class JsonStorage {
     constructor() {
         this.storageDir = path.join(__dirname, 'rooms');
-        this.cleanupInterval = 30 * 60 * 1000; // 30分钟清理一次
-        this.roomTimeout = 30 * 60 * 1000; // 房间30分钟无活动则清理
         
         // 初始化存储目录
         this.initStorage();
-        
-        // 启动定时清理
-        this.startCleanupTimer();
     }
 
     // 初始化存储目录
@@ -40,6 +35,7 @@ class JsonStorage {
             // 转换 Map 数据结构
             room.players = new Map(room.players || []);
             room.scores = new Map(room.scores || []);
+            room.readyPlayers = new Set(room.readyPlayers || []); // 转换准备状态集合
             if (room.currentRound && room.currentRound.answers) {
                 room.currentRound.answers = new Map(room.currentRound.answers || []);
             }
@@ -64,6 +60,7 @@ class JsonStorage {
                 ...room,
                 players: Array.from(room.players.entries()),
                 scores: Array.from(room.scores.entries()),
+                readyPlayers: Array.from(room.readyPlayers), // 转换 Set 为数组
                 currentRound: room.currentRound ? {
                     ...room.currentRound,
                     answers: Array.from(room.currentRound.answers.entries())
@@ -102,6 +99,8 @@ class JsonStorage {
             currentRound: null,
             scores: new Map(),
             gameHistory: [],
+            readyPlayers: new Set(), // 添加准备状态的玩家集合
+            drawerIndex: 0, // 当前画家在玩家列表中的索引
             createdAt: Date.now(),
             lastActivity: Date.now()
         };
@@ -161,6 +160,7 @@ class JsonStorage {
         
         const removed = room.players.delete(playerId);
         room.scores.delete(playerId);
+        room.readyPlayers.delete(playerId); // 从准备状态中移除
         room.lastActivity = Date.now();
         
         console.log(`玩家 ${playerId} 离开房间 ${roomId}`);
@@ -177,9 +177,18 @@ class JsonStorage {
     }
 
     // 开始新回合
-    async startRound(roomId, drawerId, word) {
+    async startRound(roomId, word) {
         const room = await this.getRoom(roomId);
         if (!room) return null;
+        
+        // 检查是否所有玩家都准备好了
+        if (room.players.size < 2 || room.readyPlayers.size !== room.players.size) {
+            return null;
+        }
+
+        // 轮流选择画家
+        const playerArray = Array.from(room.players.values());
+        const drawerId = playerArray[room.drawerIndex % playerArray.length].id;
         
         const round = {
             roundId: `round_${Date.now()}`,
@@ -193,6 +202,8 @@ class JsonStorage {
         
         room.currentRound = round;
         room.stage = 'drawing';
+        room.readyPlayers.clear(); // 游戏开始后清空准备状态
+        room.drawerIndex = (room.drawerIndex + 1) % playerArray.length; // 下一轮的画家
         room.lastActivity = Date.now();
         
         await this.writeRoom(roomId, room);
@@ -265,11 +276,49 @@ class JsonStorage {
         room.gameHistory.push({ ...room.currentRound });
         room.currentRound = null;
         room.stage = 'idle';
+        room.readyPlayers.clear(); // 回合结束后清空准备状态
         room.lastActivity = Date.now();
         
         await this.writeRoom(roomId, room);
         console.log(`房间 ${roomId} 回合结束`);
         return true;
+    }
+
+    // 切换玩家准备状态
+    async togglePlayerReady(roomId, playerId) {
+        const room = await this.getRoom(roomId);
+        if (!room || !room.players.has(playerId)) {
+            return { success: false, error: '房间不存在或玩家不在房间中' };
+        }
+
+        if (room.stage !== 'idle') {
+            return { success: false, error: '游戏进行中，无法改变准备状态' };
+        }
+
+        let isReady;
+        if (room.readyPlayers.has(playerId)) {
+            room.readyPlayers.delete(playerId);
+            isReady = false;
+        } else {
+            room.readyPlayers.add(playerId);
+            isReady = true;
+        }
+
+        room.lastActivity = Date.now();
+        await this.writeRoom(roomId, room);
+
+        // 检查是否所有玩家都准备好了
+        const allPlayersReady = room.players.size >= 2 && room.readyPlayers.size === room.players.size;
+
+        console.log(`房间 ${roomId} 玩家 ${playerId} ${isReady ? '已准备' : '取消准备'}`);
+        
+        return {
+            success: true,
+            isReady,
+            allPlayersReady,
+            readyCount: room.readyPlayers.size,
+            totalPlayers: room.players.size
+        };
     }
 
     // 获取房间完整状态
@@ -286,6 +335,8 @@ class JsonStorage {
             players: Array.from(room.players.values()),
             scores: Object.fromEntries(room.scores),
             stage: room.stage,
+            readyPlayers: Array.from(room.readyPlayers), // 添加准备状态
+            drawerIndex: room.drawerIndex, // 添加画家索引
             currentRound: room.currentRound ? {
                 roundId: room.currentRound.roundId,
                 drawerId: room.currentRound.drawerId,
@@ -320,30 +371,6 @@ class JsonStorage {
         }
     }
 
-    // 清理过期房间
-    async cleanupExpiredRooms() {
-        const now = Date.now();
-        let cleanedCount = 0;
-        
-        const roomFiles = await this.getAllRoomFiles();
-        
-        for (const file of roomFiles) {
-            const roomId = path.basename(file, '.json');
-            const room = await this.readRoom(roomId);
-            
-            if (room && (now - room.lastActivity > this.roomTimeout)) {
-                await this.deleteRoom(roomId);
-                cleanedCount++;
-            }
-        }
-        
-        if (cleanedCount > 0) {
-            console.log(`已清理 ${cleanedCount} 个过期房间`);
-        }
-        
-        return cleanedCount;
-    }
-    
     // 清理空房间（启动时调用）
     async cleanupEmptyRooms() {
         const roomFiles = await this.getAllRoomFiles();
@@ -369,15 +396,6 @@ class JsonStorage {
         }
         
         return cleanedCount;
-    }
-
-    // 启动定时清理
-    startCleanupTimer() {
-        setInterval(() => {
-            this.cleanupExpiredRooms();
-        }, this.cleanupInterval);
-        
-        console.log('JSON 存储模块已启动，定时清理已开启');
     }
 
     // 获取统计信息

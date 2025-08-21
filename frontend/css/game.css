@@ -235,6 +235,11 @@ body {
     margin-left: 5px;
 }
 
+.ready-status {
+    margin-left: 5px;
+    font-size: 0.8rem;
+}
+
 .guess-area {
     display: flex;
     flex-direction: column;

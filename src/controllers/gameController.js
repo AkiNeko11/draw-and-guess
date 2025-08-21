@@ -104,21 +104,22 @@ class GameController {
     // 开始新回合
     async startRound(req, res) {
         try {
-            const { roomId, starterId, word } = req.body;
+            const { roomId, word } = req.body;
             
-            if (!roomId || !starterId) {
+            if (!roomId) {
                 return res.status(400).json({
                     ok: false,
-                    error: '房间号和出题者ID不能为空'
+                    error: '房间号不能为空'
                 });
             }
 
-            const result = await gameService.startRound(roomId, starterId, word);
+            const result = await gameService.startRound(roomId, word);
             
             if (result.success) {
                 res.json({
                     ok: true,
                     roundId: result.roundId,
+                    drawerId: result.drawerId,
                     word: result.word
                 });
             } else {
@@ -129,6 +130,46 @@ class GameController {
             }
         } catch (error) {
             console.error('startRound error:', error);
+            res.status(500).json({
+                ok: false,
+                error: '服务器内部错误'
+            });
+        }
+    }
+
+    // 切换玩家准备状态
+    async toggleReady(req, res) {
+        try {
+            const { roomId, playerId } = req.body;
+            
+            if (!roomId || !playerId) {
+                return res.status(400).json({
+                    ok: false,
+                    error: '房间号和玩家ID不能为空'
+                });
+            }
+
+            const result = await gameService.togglePlayerReady(roomId, playerId);
+            
+            if (result.success) {
+                res.json({
+                    ok: true,
+                    isReady: result.isReady,
+                    readyCount: result.readyCount,
+                    totalPlayers: result.totalPlayers,
+                    gameStarted: result.gameStarted || false,
+                    roundId: result.roundId,
+                    drawerId: result.drawerId,
+                    word: result.word
+                });
+            } else {
+                res.status(400).json({
+                    ok: false,
+                    error: result.error
+                });
+            }
+        } catch (error) {
+            console.error('toggleReady error:', error);
             res.status(500).json({
                 ok: false,
                 error: '服务器内部错误'
@@ -256,33 +297,8 @@ class GameController {
         }
     }
 
-    // 手动清理房间
-    async cleanupRooms(req, res) {
-        try {
-            const result = await gameService.cleanupRooms();
-            
-            if (result.success) {
-                res.json({
-                    ok: true,
-                    cleanedCount: result.cleanedCount
-                });
-            } else {
-                res.status(500).json({
-                    ok: false,
-                    error: result.error
-                });
-            }
-        } catch (error) {
-            console.error('cleanupRooms error:', error);
-            res.status(500).json({
-                ok: false,
-                error: '服务器内部错误'
-            });
-        }
-    }
-
     // 健康检查
-    async healthCheck(req, res) {
+    async health(req, res) {
         res.json({
             ok: true,
             message: '你画我猜服务运行正常',
