@@ -6,11 +6,11 @@ const apiRoutes = require('./routes/api');
 const gameService = require('./services/gameService');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 // 中间件配置
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:8080'],
+    origin: ['http://localhost:5000', 'http://127.0.0.1:5000', 'http://localhost:8080'],
     credentials: true
 }));
 
