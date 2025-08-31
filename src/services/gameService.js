@@ -13,9 +13,9 @@ class GameService {
 
     // 初始化服务（服务器启动时调用）
     async initialize() {
-        console.log('🧹 正在清理遗留的空房间...');
+        console.log('正在清理遗留的空房间...');
         await storage.cleanupEmptyRooms();
-        console.log('✅ 游戏服务初始化完成');
+        console.log('游戏服务初始化完成');
     }
 
     // 生成玩家ID

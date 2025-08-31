@@ -74,15 +74,15 @@ async function startServer() {
         
         // 启动HTTP服务器
         app.listen(PORT, () => {
-            console.log(`🎨 你画我猜服务器启动成功！`);
-            console.log(`📡 服务器地址: http://localhost:${PORT}`);
-            console.log(`🎮 游戏入口: http://localhost:${PORT}`);
-            console.log(`📊 健康检查: http://localhost:${PORT}/api/health`);
-            console.log(`📈 系统统计: http://localhost:${PORT}/api/stats`);
-            console.log('🚀 准备就绪，开始游戏吧！');
+            console.log(`你画我猜服务器启动成功！`);
+            console.log(`服务器地址: http://localhost:${PORT}`);
+            console.log(`游戏入口: http://localhost:${PORT}`);
+            console.log(`健康检查: http://localhost:${PORT}/api/health`);
+            console.log(`系统统计: http://localhost:${PORT}/api/stats`);
+            console.log('准备就绪，开始游戏吧！');
         });
     } catch (error) {
-        console.error('🚨 服务器启动失败:', error);
+        console.error('服务器启动失败:', error);
         process.exit(1);
     }
 }
@@ -92,12 +92,12 @@ startServer();
 
 // 优雅关闭
 process.on('SIGTERM', () => {
-    console.log('🛑 收到 SIGTERM 信号，正在关闭服务器...');
+    console.log('收到 SIGTERM 信号，正在关闭服务器...');
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
-    console.log('🛑 收到 SIGINT 信号，正在关闭服务器...');
+    console.log('收到 SIGINT 信号，正在关闭服务器...');
     process.exit(0);
 });
 
